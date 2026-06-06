@@ -35,11 +35,61 @@ import {
   Flame,
   Image as ImageIcon,
   BookOpen,
-  Shuffle
+  Shuffle,
+  Heading1,
+  Heading2,
+  Heading3,
+  Bold,
+  Italic,
+  Quote,
+  ChevronDown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { getGemini } from '../lib/gemini';
 import { BookProject } from '../types';
+
+// Defensive parser to safely handle extra backticks or markdown text around JSON blocks
+const safelyExtractAndParseJSON = (text: string | null | undefined): any => {
+  if (!text) return {};
+  const cleanedText = text.trim();
+  
+  // 1. Try to parse directly
+  try {
+    return JSON.parse(cleanedText);
+  } catch (e) {
+    // Continue
+  }
+
+  // 2. Try removing markdown wrap blocks
+  try {
+    const withoutMarkdown = cleanedText.replace(/^\s*```json\s*|\s*```\s*$/g, '').replace(/```json|```/g, '').trim();
+    return JSON.parse(withoutMarkdown);
+  } catch (e) {
+    // Continue
+  }
+
+  // 3. Extract boundary block starting from first '{' to last '}'
+  const firstBrace = cleanedText.indexOf('{');
+  const lastBrace = cleanedText.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const extracted = cleanedText.substring(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(extracted);
+    } catch (e) {
+      console.warn("Fallo secundario al parsear subsegmento JSON de límites:", e);
+    }
+  }
+
+  // 4. Try basic replacements for escaped control symbols if still failing
+  try {
+    const basicUnescape = cleanedText.replace(/\\n/g, ' ').replace(/\\r/g, '').trim();
+    return JSON.parse(basicUnescape);
+  } catch (e) {
+    // Return empty fallback or bubble up error cleanly
+  }
+
+  throw new Error("No se pudo extraer una estructura JSON válida de la respuesta del modelo de lenguaje.");
+};
 
 interface EditorProps {
   project: BookProject | null;
@@ -62,6 +112,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
   // Selection States
   const [selection, setSelection] = useState({ text: '', start: 0, end: 0 });
   const [showContextMenu, setShowContextMenu] = useState(false);
+  const [showFormatDropdown, setShowFormatDropdown] = useState(false);
   
   // ToC / Navigation State
   const [showToC, setShowToC] = useState(false);
@@ -133,6 +184,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     setShowBlueprints(false);
     setShowHookAnalyzer(false);
     setShowSynonyms(false);
+    setShowFormatDropdown(false);
   };
 
   const generateBeatSuggestion = async (formulaId: string, beatIndex: number, beatName: string, beatDesc: string) => {
@@ -239,8 +291,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         }
       });
 
-      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
-      const parsed = JSON.parse(cleanedText);
+      const parsed = safelyExtractAndParseJSON(response.text);
 
       setHookAnalysis({
         curiosityScore: parsed.curiosityScore || 50,
@@ -521,8 +572,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         }
       });
 
-      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
-      const parsed = JSON.parse(cleanedText);
+      const parsed = safelyExtractAndParseJSON(response.text);
 
       setSynonymsData({
         word: parsed.word || selectedWord,
@@ -553,6 +603,57 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       text: synonymWord,
       end: start + synonymWord.length
     }));
+  };
+
+  const applyFormatSelection = (format: 'title' | 'chapter' | 'subtitle' | 'body' | 'quote' | 'bold' | 'italic') => {
+    if (!selection.text) return;
+    const start = selection.start;
+    const end = selection.end;
+    const trimmed = selection.text.trim();
+    
+    // Clean out existing block-level prefix characters (like #, ##, ###, >)
+    let cleanRaw = trimmed.replace(/^(#{1,6}\s+|>\s+)/gm, '').trim();
+    
+    let formatted = '';
+    switch (format) {
+      case 'title':
+        formatted = `\n\n# ${cleanRaw}\n\n`;
+        break;
+      case 'chapter':
+        formatted = `\n\n## ${cleanRaw}\n\n`;
+        break;
+      case 'subtitle':
+        formatted = `\n\n### ${cleanRaw}\n\n`;
+        break;
+      case 'body':
+        formatted = `\n\n${cleanRaw}\n\n`;
+        break;
+      case 'quote':
+        formatted = `\n\n> ${cleanRaw}\n\n`;
+        break;
+      case 'bold':
+        formatted = `**${selection.text}**`;
+        break;
+      case 'italic':
+        formatted = `*${selection.text}*`;
+        break;
+      default:
+        formatted = selection.text;
+    }
+    
+    const newContent = 
+      content.substring(0, start) + 
+      formatted + 
+      content.substring(end);
+      
+    setContent(newContent);
+    setShowContextMenu(false);
+    setShowFormatDropdown(false);
+    
+    // If we changed to Title or Chapter, we can also set the current chapter heading focus
+    if (format === 'title' || format === 'chapter') {
+      setCurrentChapter(cleanRaw);
+    }
   };
 
   const processText = async (action: 'polish' | 'emotion' | 'summarize' | 'expand') => {
@@ -664,8 +765,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         }
       });
 
-      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
-      const analysis = JSON.parse(cleanedText);
+      const analysis = safelyExtractAndParseJSON(response.text);
       
       setSelectionEditorialData({
         originalText: textToAnalyze,
@@ -1080,6 +1180,85 @@ export default function Editor({ project, onUpdate }: EditorProps) {
                 </div>
                 <ContextButton icon={<SearchCheck size={14} className="text-amber-600 animate-pulse" />} onClick={analyzeSelectionEditorial} title="Editor Táctico (Ortografía, Reescrituras)" />
                 <ContextButton icon={<BookOpen size={14} className="text-amber-800 animate-pulse" />} onClick={fetchSynonyms} title="Buscar Sinónimos de Precisión" />
+                
+                {/* Word-style Format Selector Dropdown */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-stone-600 hover:bg-amber-50 rounded-lg hover:text-amber-700 font-sans font-bold transition-all ${showFormatDropdown ? 'bg-amber-50 text-amber-700' : ''}`}
+                    title="Estilos de Formato (como en Word)"
+                  >
+                    <Type size={14} className="text-amber-700" />
+                    <span>Estilos</span>
+                    <ChevronDown size={10} className="text-stone-400" />
+                  </button>
+                  
+                  <AnimatePresence>
+                    {showFormatDropdown && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full left-0 mb-2 w-52 bg-white border border-stone-200/80 shadow-2xl rounded-2xl p-2.5 z-50 flex flex-col gap-0.5 ring-4 ring-black/5"
+                      >
+                        <div className="px-2 py-1 mb-1 border-b border-stone-100">
+                          <span className="text-[9px] font-black uppercase text-stone-400 tracking-widest font-sans">Estilos tipo Word</span>
+                        </div>
+                        <button 
+                          onClick={() => applyFormatSelection('title')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans font-bold flex items-center gap-2 group transition-colors"
+                        >
+                          <Heading1 size={13} className="text-amber-700 group-hover:scale-110 transition-transform" />
+                          Título Principal (#)
+                        </button>
+                        <button 
+                          onClick={() => applyFormatSelection('chapter')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans font-bold flex items-center gap-2 group transition-colors"
+                        >
+                          <Heading2 size={13} className="text-amber-700 group-hover:scale-110 transition-transform" />
+                          Capítulo (##)
+                        </button>
+                        <button 
+                          onClick={() => applyFormatSelection('subtitle')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans font-semibold flex items-center gap-2 group transition-colors"
+                        >
+                          <Heading3 size={13} className="text-amber-600 group-hover:scale-110 transition-transform" />
+                          Subtítulo (###)
+                        </button>
+                        <button 
+                          onClick={() => applyFormatSelection('body')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans flex items-center gap-2 group transition-colors"
+                        >
+                          <Type size={13} className="text-stone-500 group-hover:scale-110 transition-transform" />
+                          Cuerpo (Normal)
+                        </button>
+                        <button 
+                          onClick={() => applyFormatSelection('quote')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans italic flex items-center gap-2 group transition-colors"
+                        >
+                          <Quote size={13} className="text-stone-500 group-hover:scale-110 transition-transform" />
+                          Cita Destacada
+                        </button>
+                        <div className="h-px bg-stone-100 my-1" />
+                        <button 
+                          onClick={() => applyFormatSelection('bold')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans font-bold flex items-center gap-2 group transition-colors"
+                        >
+                          <Bold size={13} className="text-stone-700 group-hover:scale-110 transition-transform" />
+                          Negrita (Word)
+                        </button>
+                        <button 
+                          onClick={() => applyFormatSelection('italic')}
+                          className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-amber-50 text-stone-850 hover:text-amber-800 text-xs font-sans italic flex items-center gap-2 group transition-colors"
+                        >
+                          <Italic size={13} className="text-stone-700 group-hover:scale-110 transition-transform" />
+                          Cursiva (Word)
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <ContextButton icon={<Flame size={14} className="text-amber-700 animate-pulse" />} onClick={analyzeHook} title="Auditar Gancho" />
                 <ContextButton icon={<List size={14} className="text-amber-700" />} onClick={makeSelectionChapter} title="Convertir en Capítulo (#)" />
                 <ContextButton icon={<Sparkles size={14} />} onClick={() => processText('polish')} title="Pulir Selección" />
