@@ -1,0 +1,6 @@
+{
+  "name": "Lumina Editorial",
+  "description": "Tu asistente editorial de inteligencia artificial para escribir, estructurar y pulir libros profesionales y creativos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
