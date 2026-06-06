@@ -123,7 +123,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
   // Selection-based Editorial Corrector
   const [showSelectionEditorial, setShowSelectionEditorial] = useState(false);
   const [isAnalyzingSelectionEditorial, setIsAnalyzingSelectionEditorial] = useState(false);
-  const [selectedImprovementTab, setSelectedImprovementTab] = useState<'polish' | 'creative' | 'elevate' | 'emotivity'>('polish');
+  const [selectedImprovementTab, setSelectedImprovementTab] = useState<'polish' | 'creative' | 'elevate' | 'emotivity' | 'universal'>('polish');
   const [selectionEditorialData, setSelectionEditorialData] = useState<{
     originalText: string;
     spellingGrammar: { original: string; errorType: string; explanation: string; suggestion: string }[];
@@ -133,6 +133,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       creative: string;
       elevate: string;
       emotivity: string;
+      universal: string;
     };
   } | null>(null);
 
@@ -681,7 +682,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: prompt,
       });
       setResult(response.text || "No se pudo procesar.");
@@ -725,11 +726,12 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       TAREA:
       1. Realiza una curación minuciosa de ortografía, gramática, puntuación, vicios del lenguaje (cacofonía, queísmo, etc.) y debilidades estilísticas sobre el fragmento de texto proporcionado.
       2. Genera una apreciación o diagnóstico del estilo literario actual de este fragmento en 1 o 2 párrafos.
-      3. Ofrece cuatro versiones reescritas impecables, respetando las intenciones subyacentes del autor pero transformadas mediante distintos enfoques creativos para aportarle personalidad:
+      3. Ofrece cinco versiones reescritas impecables, respetando las intenciones subyacentes del autor pero transformadas mediante distintos enfoques creativos para aportarle personalidad:
          - Pulido Integral (polish): Un texto depurado, ágil, sin redundancias, donde cada palabra cuenta. El ritmo es fluido y orgánico.
          - Matiz Creativo (creative): Una versión que aporta metáforas ricas, figuras literarias sensoriales, colores, sonoridades y texturas para alimentar la imaginación.
          - Elevar Tono (elevate): Una prosa magnánima, con vocabulario prestigioso, giros construidos para otorgarle madurez literaria y distinción clásica.
          - Mejorar Emotividad (emotivity): Una reescritura que intensifica los sentimientos latentes, elevando el dramatismo, la resonancia melancólica, el suspenso interior o la efusividad poética del pasaje.
+         - Claridad Universal (universal): Una reescritura que mantiene el corazón o núcleo central de lo escrito sin alterar su sentido de fondo, pero adaptándolo a un tono directo, diáfano y empático que sea perfectamente comprensible tanto para un adolescente como para un anciano (lenguaje intergeneracional accesible, claro y humano).
 
       REGLAS CRÍTICAS DE RESPUESTA:
       - Responde EXCLUSIVAMENTE con un único objeto estructurado en formato JSON. No incluyas explicaciones preliminares ni envoltorios fuera del objeto.
@@ -748,7 +750,8 @@ export default function Editor({ project, onUpdate }: EditorProps) {
           "polish": "Texto entero reescrito bajo Pulido Integral",
           "creative": "Texto entero reescrito bajo Matiz Creativo",
           "elevate": "Texto entero reescrito bajo Elevar Tono",
-          "emotivity": "Texto entero reescrito bajo Mejorar Emotividad"
+          "emotivity": "Texto entero reescrito bajo Mejorar Emotividad",
+          "universal": "Texto entero reescrito bajo Claridad Universal (comprensible de adolescente a anciano manteniendo el corazón de lo escrito)"
         }
       }
 
@@ -771,11 +774,12 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         originalText: textToAnalyze,
         spellingGrammar: analysis.spellingGrammar || [],
         styleOverview: analysis.styleOverview || 'Se ha completado el análisis de estilo y voz lírica de la selección.',
-        suggestions: analysis.suggestions || {
-          polish: textToAnalyze,
-          creative: textToAnalyze,
-          elevate: textToAnalyze,
-          emotivity: textToAnalyze
+        suggestions: {
+          polish: analysis.suggestions?.polish || textToAnalyze,
+          creative: analysis.suggestions?.creative || textToAnalyze,
+          elevate: analysis.suggestions?.elevate || textToAnalyze,
+          emotivity: analysis.suggestions?.emotivity || textToAnalyze,
+          universal: analysis.suggestions?.universal || textToAnalyze
         }
       });
       setSelectedImprovementTab('polish');
@@ -1561,12 +1565,12 @@ export default function Editor({ project, onUpdate }: EditorProps) {
                         <div className="space-y-4 pt-4 border-t border-stone-100">
                           <span className="text-[10px] uppercase font-black text-stone-400 tracking-widest block">Reescrituras Avanzadas</span>
                           
-                          <div className="grid grid-cols-4 gap-1 bg-stone-50 p-1 rounded-xl">
-                            {(['polish', 'creative', 'elevate', 'emotivity'] as const).map(tabKey => (
+                          <div className="grid grid-cols-5 gap-0.5 bg-stone-50 p-1 rounded-xl">
+                            {(['polish', 'creative', 'elevate', 'emotivity', 'universal'] as const).map(tabKey => (
                               <button
                                 key={tabKey}
                                 onClick={() => setSelectedImprovementTab(tabKey)}
-                                className={`py-1.5 text-[8px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                className={`py-1.5 text-[7.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                                   selectedImprovementTab === tabKey 
                                     ? 'bg-white text-amber-700 shadow-sm' 
                                     : 'text-stone-400 hover:text-stone-600'
@@ -1574,7 +1578,8 @@ export default function Editor({ project, onUpdate }: EditorProps) {
                               >
                                 {tabKey === 'polish' ? 'Pulido' :
                                  tabKey === 'creative' ? 'Creativo' :
-                                 tabKey === 'elevate' ? 'Elevar' : 'Emotivo'}
+                                 tabKey === 'elevate' ? 'Elevar' :
+                                 tabKey === 'emotivity' ? 'Emotivo' : 'Universal'}
                               </button>
                             ))}
                           </div>
@@ -1584,7 +1589,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
                               "{selectedImprovementTab === 'polish' ? selectionEditorialData.suggestions.polish :
                                 selectedImprovementTab === 'creative' ? selectionEditorialData.suggestions.creative :
                                 selectedImprovementTab === 'elevate' ? selectionEditorialData.suggestions.elevate :
-                                selectionEditorialData.suggestions.emotivity}"
+                                selectedImprovementTab === 'emotivity' ? selectionEditorialData.suggestions.emotivity : selectionEditorialData.suggestions.universal}"
                             </p>
 
                             <button
@@ -1592,7 +1597,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
                                 selectedImprovementTab === 'polish' ? selectionEditorialData.suggestions.polish :
                                 selectedImprovementTab === 'creative' ? selectionEditorialData.suggestions.creative :
                                 selectedImprovementTab === 'elevate' ? selectionEditorialData.suggestions.elevate :
-                                selectionEditorialData.suggestions.emotivity
+                                selectedImprovementTab === 'emotivity' ? selectionEditorialData.suggestions.emotivity : selectionEditorialData.suggestions.universal
                               )}
                               className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                             >
