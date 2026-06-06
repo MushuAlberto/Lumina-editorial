@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { BookProject } from '../types';
 import { getGemini } from '../lib/gemini';
-import { getOpenRouter, OPENROUTER_MODEL } from '../lib/openrouter';
 
 type AssetType = 'cover' | 'back' | 'illustration' | 'lore';
 
@@ -109,18 +108,17 @@ export default function Assets({ project }: { project: BookProject | null }) {
     if (!project) return;
     setIsLoreLoading(true);
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       const prompt = `Basado en la obra "${project.title}", identifica 4 elementos clave del mundo (lugares, objetos mágicos, leyes sociales o facciones). 
-      Responde EXCLUSIVAMENTE con un objeto JSON con esta estructura exacta: {"items": [{"name": "...", "category": "...", "description": "..."}]}`;
+      Responde con un JSON array: [{"name": "...", "category": "...", "description": "..."}]`;
       
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
       });
 
-      const cleanedText = response.choices[0]?.message?.content?.replace(/```json|```/g, '').trim() || '{"items":[]}';
-      const extracted = JSON.parse(cleanedText).items || [];
+      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '[]';
+      const extracted = JSON.parse(cleanedText);
       setLoreItems(prev => [...prev, ...extracted.map((e: any) => ({ ...e, id: Math.random().toString() }))]);
     } catch (err) {
       console.error(err);

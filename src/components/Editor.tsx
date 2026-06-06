@@ -39,7 +39,6 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { getGemini } from '../lib/gemini';
-import { getOpenRouter, OPENROUTER_MODEL } from '../lib/openrouter';
 import { BookProject } from '../types';
 
 interface EditorProps {
@@ -141,7 +140,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     setGeneratingBeatIndex(beatIndex);
     
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       const prompt = `Actúa como un estratega literario de best sellers y editor del más alto nivel.
       Estás diseñando la estructura de la obra titulada "${project.title}" (Género: ${project.genre}). Sinopsis actual: "${project.synopsis}".
       
@@ -154,12 +153,12 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       - Escribe en un tono formal, literario, entusiasta e inspirador. Suministra ideas específicas sobre acciones del protagonista, la atmósfera y el impacto temático de este hito.
       - Responde directamente con la recomendación literaria de un párrafo y medio sin saludos ni preámbulos.`;
 
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }]
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt
       });
 
-      const text = response.choices[0]?.message?.content || "No se pudo generar la idea estructural.";
+      const text = response.text || "No se pudo generar la idea estructural.";
       setBeatInspiration(prev => ({
         ...prev,
         [`${formulaId}_${beatIndex}`]: text
@@ -202,7 +201,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     setShowHookAnalyzer(true);
 
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       const prompt = `Eres un editor literario de prestigio supremo, cazatalentos literarios y especialista en Best-sellers de la lista de New York Times.
       Tu misión es realizar una auditoría técnica implacable pero constructiva del primer plano o gancho inicial ("initial hook") suministrado abajo.
       
@@ -232,13 +231,15 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         "rewriteProposal": "El fragmento completo reescrito meticulosamente por ti aplicando el máximo potencial estético del show-dont-tell y brecha de curiosidad comercial"
       }`;
 
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
 
-      const cleanedText = response.choices[0]?.message?.content?.replace(/```json|```/g, '').trim() || '{}';
+      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
       const parsed = JSON.parse(cleanedText);
 
       setHookAnalysis({
@@ -483,7 +484,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     setShowSynonyms(true);
 
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       const contextSentence = content.substring(
         Math.max(0, selection.start - 120),
         Math.min(content.length, selection.end + 120)
@@ -512,13 +513,15 @@ export default function Editor({ project, onUpdate }: EditorProps) {
         ]
       }`;
 
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
 
-      const cleanedText = response.choices[0]?.message?.content?.replace(/```json|```/g, '').trim() || '{}';
+      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
       const parsed = JSON.parse(cleanedText);
 
       setSynonymsData({
@@ -558,7 +561,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     
     setIsProcessing(true);
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       let prompt = '';
 
       switch (action) {
@@ -576,11 +579,11 @@ export default function Editor({ project, onUpdate }: EditorProps) {
           break;
       }
 
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }]
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
       });
-      setResult(response.choices[0]?.message?.content || "No se pudo procesar.");
+      setResult(response.text || "No se pudo procesar.");
     } catch (error) {
       console.error(error);
       setResult("Error en la conexión con el motor de IA.");
@@ -615,7 +618,7 @@ export default function Editor({ project, onUpdate }: EditorProps) {
     setShowSelectionEditorial(true);
 
     try {
-      const ai = getOpenRouter();
+      const ai = getGemini();
       const prompt = `Actúa como un corrector de estilo premium e intelectual técnico filológico de altísimo nivel. Estás ayudando a pulir una obra titulada "${project?.title || 'Sin Título'}" (${project?.genre ? `Género: ${project.genre}` : ''}).
       
       TAREA:
@@ -653,13 +656,15 @@ export default function Editor({ project, onUpdate }: EditorProps) {
       ${textToAnalyze}
       """`;
 
-      const response = await ai.chat.completions.create({
-        model: OPENROUTER_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
       });
 
-      const cleanedText = response.choices[0]?.message?.content?.replace(/```json|```/g, '').trim() || '{}';
+      const cleanedText = response.text?.replace(/```json|```/g, '').trim() || '{}';
       const analysis = JSON.parse(cleanedText);
       
       setSelectionEditorialData({
